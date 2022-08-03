@@ -33,15 +33,24 @@ print("Ready!")
 
 def record():
     print("Recording...")
+    tic = time.perf_counter()
     with mic as source:
         audio = r.listen(source)
-    return prepare_model_input([read_audio(io.BytesIO(audio.get_wav_data()))], device=device)
+    input = prepare_model_input([read_audio(io.BytesIO(audio.get_wav_data()))], device=device)
+    toc = time.perf_counter()
+    print(f"Time spent recording: {toc-tic:0.4f} seconds")
+    return input
 
 
 def transcribe(input) -> None:
     print("Transcribing...")
+    tic = time.perf_counter()
     output = model(input)[0]
-    print(decoder(output.cuda()))
+    result = decoder(output.cuda())
+    type(result)
+    print(result)
+    toc = time.perf_counter()
+    print(f"Time spent transcribing: {toc-tic:0.4f} seconds")
     
 
 def recordAndTranscribe() -> None:
