@@ -1,59 +1,85 @@
 # Speech to Text
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import multiprocessing as mp
+from threading import Thread
 
 import io
+import time
+import keyboard
+
 import torch
-import pyaudio # Soundcard audio I/O access library
-import wave # Python 3 module for reading / writing simple .wav files
-import speech_recognition as sr
 import torchaudio
 
+import speech_recognition as sr
 
-import time
+def record(queue: mp.Queue, ns) -> None:
+    # Start microphone
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
+    print("Microphone process initialized.")
+    while True:
+        time.sleep(0.5)
+        if ns.is_recording:
+            with mic as source:
+                audio = recognizer.listen(source, phrase_time_limit=ns.phrase_time_limit)
+            queue.put(audio)
 
-print("Setting up...")
-# Choose device to run model
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+def prepare(audio: sr.AudioData):
+    return prepare_model_input([read_audio(io.BytesIO(audio.get_wav_data()))], device=device)
 
-# Import model
-model, decoder, utils = torch.hub.load(repo_or_dir='snakers4/silero-models',
-                                       model='silero_stt',
-                                       language='en', # also available 'de', 'es'
-                                       device=device)
-(read_batch, split_into_batches,
- read_audio, prepare_model_input) = utils  # see function signature for details
-
-# Initialize microphone
-r = sr.Recognizer()
-mic = sr.Microphone()
-
-print("Ready!")
-
-def record():
-    print("Recording...")
-    tic = time.perf_counter()
-    with mic as source:
-        audio = r.listen(source)
-    input = prepare_model_input([read_audio(io.BytesIO(audio.get_wav_data()))], device=device)
-    toc = time.perf_counter()
-    print(f"Time spent recording: {toc-tic:0.4f} seconds")
-    return input
-
-
-def transcribe(input) -> None:
-    print("Transcribing...")
-    tic = time.perf_counter()
+def transcribe(input: torch.Tensor) -> str:
     output = model(input)[0]
     result = decoder(output.cuda())
-    type(result)
-    print(result)
-    toc = time.perf_counter()
-    print(f"Time spent transcribing: {toc-tic:0.4f} seconds")
-    
+    return result if result else ""
 
-def recordAndTranscribe() -> None:
+def prepareAndTranscribe(queue: mp.Queue, ns):
+    print("Transcription thread initialized")
     while True:
-        input = record()
-        transcribe(input)
+        time.sleep(0.5)
+        if not queue.empty():
+            audio = queue.get() # this will empty out the queue if is_recording = False
+            if ns.is_recording:
+                input = prepare(audio)
+                result = transcribe(input)
+                if result != "":
+                    print(result)
+
+def toggleRecord(ns) -> None:
+    print("Toggle")
+    ns.is_recording ^= True
+
+if __name__ == "__main__":
+    print("Starting up...")
+
+    # Choose device to run model
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print('...')
+    # Import model
+    model, decoder, utils = torch.hub.load(repo_or_dir='snakers4/silero-models',
+                                           model='silero_stt',
+                                           language='en', # also available 'de', 'es'
+                                           device=device)
+
+    (read_batch, split_into_batches,
+     read_audio, prepare_model_input) = utils  # see function signature for details
+    print('...')
+    mgr = mp.Manager()
+    ns = mgr.Namespace()
+    ns.is_recording = False
+    ns.phrase_time_limit = 3
+    print('...')
+    audio_q = mp.Queue() # audio to be transcribed
+    record_process = mp.Process(target=record, args=(audio_q, ns,))
+    record_process.daemon = True
+    transcribe_thread = Thread(target=prepareAndTranscribe, args=(audio_q, ns,))
+    transcribe_thread.daemon = True
+    print('...')
+    record_process.start()
+    transcribe_thread.start()
+    keyboard.add_hotkey("ctrl+plus", lambda: toggleRecord(ns))
+
+    print("Ready!")
+
+    input("Press Enter to continue.\n")
