@@ -1,0 +1,1 @@
+python train_acoustic_model.py

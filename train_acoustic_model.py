@@ -1,6 +1,17 @@
+import torch
 import data
 from torch.utils.data import DataLoader
 from model import AcousticModel
+from train import TrainingModule
+
+print("Starting acoustic model training.")
+
+if torch.cuda.is_available():
+    if not torch.cuda.is_initialized():
+        print('Initializing CUDA.')
+        torch.cuda.init()
+    print('Utilizing {}.'.format(torch.cuda.get_device_name()))
+    print('Make sure to set device if the wrong GPU is utilized.')
 
 class params():
     # ====== Hyper Parameters ====== #
@@ -14,9 +25,11 @@ class params():
     max_spec_len = 4096
     max_label_len = 256
 
+    zero_infinity = False
+
     batch_size = 16
     learning_rate = 0.001
-    num_workers = 2
+    num_workers = 0
     # ============================== #
 
     # ===== Sample Parameters ====== #
@@ -33,6 +46,7 @@ class params():
     # ============================== #
 
 # Load Data Sets
+print('Loading data...', end=' ')
 train_dataset = data.DataSet(params.train_path,
                              params.sample_rate,
                              params.n_feats,
@@ -49,8 +63,10 @@ val_dataset = data.DataSet(params.test_path,
                            params.time_mask,
                            params.freq_mask,
                            shuffle=params.shuffle)
+print('Done!')
 
 # Construct Data Loaders
+print('Building data loaders...', end=' ')
 train_loader = DataLoader(dataset=train_dataset,
                           batch_size=params.batch_size,
                           num_workers=params.num_workers,
@@ -61,8 +77,21 @@ val_loader = DataLoader(dataset=val_dataset,
                           num_workers=params.num_workers,
                           collate_fn=data.collate_fn_padd,
                           pin_memory = params.pin_memory)
+print('Done!')
+
 # Build model
+print('Building model...', end=' ')
+model = AcousticModel(params.hidden_size,
+                      params.num_classes,
+                      params.n_feats,
+                      params.dense_size,
+                      params.num_layers,
+                      params.dropout)
+print('Done!')
 
-    
+training_module = TrainingModule(model, train_loader, params)
 
+print('Now training...')
+training_module.train_num_batches(10)
 
+input("Press Enter to continue...")

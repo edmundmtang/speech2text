@@ -22,11 +22,13 @@ class LogMelSpec(nn.Module):
 class DataSet(torch.utils.data.Dataset):
         
     def __init__(self, json_path, sample_rate, n_feats, specaug_rate, specaug_policy, time_mask, freq_mask,
-                 valid=False, shuffle=True, text_to_int=True, log_ex=True):
+                 valid=False, shuffle=True, text_to_int=True, log_ex=True, verbose=False):
         self.log_ex = log_ex
         self.text_process = utilities.TextProcess()
-        
-        print("Loading data json file from", json_path)
+
+        if verbose:
+            print("Loading data json file from", json_path)
+
         self.data = pd.read_json(json_path, lines=True)
         
         if valid: # 

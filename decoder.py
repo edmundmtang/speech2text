@@ -1,3 +1,4 @@
+import torch
 from utilities import TextProcess
 
 textprocess = TextProcess()
