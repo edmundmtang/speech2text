@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
     class params():
-        # ====== Hyper Parameters ====== #
+        # Hyper Parameters
         num_classes = 28
         # n_feats = 81 # decided earlier based on how mel spectrograms were generated
         dropout = 0.1
@@ -32,14 +32,19 @@ if __name__ == "__main__":
         max_spec_len = 4096
         max_label_len = 256
 
-        zero_infinity = False
+        zero_infinity = False # for CTCLoss fn
 
+        # CUDA
         num_workers = 2
         batch_size = 4
-        learning_rate = 0.001
-        # ============================== #
 
-        # ===== Sample Parameters ====== #
+        # optimizer scheduler
+        scheduler_mode = 'triangular2'
+        base_lr = 0.001
+        max_lr = 0.2
+        cycles = 10
+
+        # Sample Parameters
         sample_rate = 8000
         n_feats = 81
         specaug_rate = 0.5 # To-do: specaug_rate, specaug_policy, time_mask, and freq_mask do nothing until spec augment is implemented
@@ -50,7 +55,6 @@ if __name__ == "__main__":
         pin_memory = True
         train_path = 'F:/cv-corpus-11.0-2022-09-21/en/train.json'
         test_path = 'F:/cv-corpus-11.0-2022-09-21/en/test.json'
-        # ============================== #
 
     # Load Data Sets
     print('Loading data...', end=' ')
@@ -95,13 +99,12 @@ if __name__ == "__main__":
                           params.num_layers,
                           params.dropout)
     print('Done!')
-
+    
+    params.step_size_up  = len(train_loader)//(2*params.cycles)
+    print('step_size_up = ', params.step_size_up)
     training_module = TrainingModule(model, train_loader, params, device)
 
     print('Now training...')
-
     training_module.train_num_batches(len(train_loader), debugging=True)
 
-    print('num_workers: {} | batch_size: {} | average_time_per_16: {:.2f} s'.format(
-        params.num_workers, params.batch_size, time_per_16))
     input("Press Enter to continue...")
