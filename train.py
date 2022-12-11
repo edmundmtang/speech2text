@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import torch.optim as optim
@@ -9,18 +10,20 @@ textprocess = TextProcess()
 
 class TrainingModule():
 
-    def __init__(self, model, data_loader, params):
-        self.model = model
+    def __init__(self, model, data_loader, params, device=torch.device('cpu')):
+        self.model = model.to(device)
         self.data_loader = data_loader
         self.loss_fn = nn.CTCLoss(blank=27, zero_infinity=params.zero_infinity)
         self.optimizer = optim.AdamW(model.parameters(), params.learning_rate)
+        self.device = device
         #self.scheduler = optim.lr_scheduler...
 
     def step(self, batch):
         spectrograms, labels, input_lens, label_lens = batch
+        spectrograms = spectrograms.to(self.device)
         bs = spectrograms.shape[0]
         hidden = self.model._init_hidden(bs)
-        hn, c0 = hidden[0], hidden[1]
+        hn, c0 = hidden[0].to(self.device) , hidden[1].to(self.device)
 
         # zero gradients each batch
         self.optimizer.zero_grad()
@@ -41,22 +44,22 @@ class TrainingModule():
         start_time = time()
         for i, batch in enumerate(self.data_loader):
             outputs, loss = self.step(batch)
+            current_time = time()
+            average_time = (current_time - start_time)/(i+1)
+            if average_time > 1:
+                rate_str = ' | {:.2f} s/it'.format(average_time)
+            else:
+                rate_str = ' | {:.2f} it/s'.format(1/average_time)
             if debugging:
                 print('Target string: ', textprocess.int_to_text_seq(batch[1][0].tolist()))
                 print('Output string: ', GreedyDecode(outputs[:,0,:], dim=1, collapse_repeated=False))
-                current_time = time()
-                average_time = (current_time - start_time)/(i+1)
-                if average_time > 1:
-                    rate_str = ' | {:.2f} s/it'.format(average_time)
-                else:
-                    rate_str = ' | {:.2f} it/s'.format(1/average_time)
                 print('================================')
                 print('Batch {}/{} loss: {}'.format(i + 1, num, loss) + rate_str)
                 print('================================')
             else:
-                print('Batch {}/{} loss: {}'.format(i + 1, num, loss))
+                print('Batch {}/{} loss: {}'.format(i + 1, num, loss) + rate_str)
             if i+1 == num:
-                break
+                return average_time # average time per batch
     
     def train_one_epoch(self, epoch_index, batch_list, loss_list, batches=100, debugging=False):
         pass
