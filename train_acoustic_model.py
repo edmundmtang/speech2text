@@ -21,6 +21,21 @@ if __name__ == "__main__":
 
 
     class params():
+        # Verbosity Settings
+        verbose = True
+        print_freq = 1024
+        
+        # Save Directory
+        save_freq = 4096
+        save_dir = 'F:/Programming/python/speech2text/saves'
+        
+        # Load Dir
+        resume = True
+        load_path = 'F:/Programming/python/speech2text/saves/checkpoints/ckp_2022-12-23_b-0008193.pth'
+
+        # Meta
+        sample_freq = 1024
+        
         # Hyper Parameters
         num_classes = 28
         # n_feats = 81 # decided earlier based on how mel spectrograms were generated
@@ -32,8 +47,6 @@ if __name__ == "__main__":
         max_spec_len = 4096
         max_label_len = 256
 
-        zero_infinity = False # for CTCLoss fn
-
         # CUDA
         num_workers = 2
         batch_size = 4
@@ -41,7 +54,7 @@ if __name__ == "__main__":
         # optimizer scheduler
         scheduler_mode = 'triangular2'
         base_lr = 0.001
-        max_lr = 0.2
+        max_lr = 0.01
         cycles = 10
 
         # Sample Parameters
@@ -82,15 +95,17 @@ if __name__ == "__main__":
                               batch_size=params.batch_size,
                               num_workers=params.num_workers,
                               collate_fn=data.collate_fn_padd,
+                              shuffle = params.shuffle,
                               pin_memory = params.pin_memory)
     val_loader = DataLoader(dataset=val_dataset,
                               batch_size=params.batch_size,
                               num_workers=params.num_workers,
                               collate_fn=data.collate_fn_padd,
+                              shuffle = params.shuffle,
                               pin_memory = params.pin_memory)
     print('Done!')
 
-    # Build model
+    # Build Model
     print('Building model...', end=' ')
     model = AcousticModel(params.hidden_size,
                           params.num_classes,
@@ -99,12 +114,12 @@ if __name__ == "__main__":
                           params.num_layers,
                           params.dropout)
     print('Done!')
-    
-    params.step_size_up  = len(train_loader)//(2*params.cycles)
-    print('step_size_up = ', params.step_size_up)
+
+    # Setup Training Module
+    params.step_size_up = len(train_loader)//(2*params.cycles)
     training_module = TrainingModule(model, train_loader, params, device)
 
     print('Now training...')
-    training_module.train_num_batches(len(train_loader), debugging=True)
+    training_module.train(params.verbose)
 
     input("Press Enter to continue...")
